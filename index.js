@@ -14,7 +14,8 @@ class WebextensionPlugin {
     autoreload = true,
     vendor = 'chrome',
     manifestDefaults = {},
-    quiet = false
+    manifestOverwrites = {}
+    quiet = false,
   } = {}) {
     // Apply Settings
     this.port = port
@@ -23,6 +24,7 @@ class WebextensionPlugin {
     this.reconnectTime = reconnectTime
     this.vendor = vendor
     this.manifestDefaults = manifestDefaults
+    this.manifestOverwrites = manifestOverwrites
     this.quiet = quiet
 
     // Set some defaults
@@ -192,7 +194,8 @@ class WebextensionPlugin {
 
     manifest = {
       ...this.manifestDefaults,
-      ...manifest
+      ...manifest,
+      ...this.manifestOverwrites
     }
 
     // Tranform __chrome__key -> key
