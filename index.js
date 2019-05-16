@@ -14,7 +14,7 @@ class WebextensionPlugin {
     autoreload = true,
     vendor = "chrome",
     manifestDefaults = {},
-    extendPersmissions = [],
+    extendPermissions = [],
     quiet = false
   } = {}) {
     // Apply Settings
@@ -24,7 +24,7 @@ class WebextensionPlugin {
     this.reconnectTime = reconnectTime;
     this.vendor = vendor;
     this.manifestDefaults = manifestDefaults;
-    this.extendPersmissions = extendPersmissions;
+    this.extendPermissions = extendPermissions;
     this.quiet = quiet;
 
     // Set some defaults
@@ -196,11 +196,12 @@ class WebextensionPlugin {
     }
 
     manifest = {
+      permissions: [],
       ...this.manifestDefaults,
       ...manifest
     };
 
-    manifest.permissions.concat(this.extendPersmissions);
+    manifest.permissions = manifest.permissions.concat(this.extendPermissions);
 
     // Tranform __chrome__key -> key
     manifest = manifestUtils.transformVendorKeys(manifest, this.vendor);
