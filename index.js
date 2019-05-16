@@ -1,37 +1,37 @@
-const path = require('path')
-const { promisify } = require('util')
-const WebSocket = require('ws')
-const compileTemplate = require('./utils/compile-template')
-const WebpackFileEntry = require('./utils/webpack-file-entry')
-const manifestUtils = require('./manifest-utils')
-const vendors = require('./vendors.json')
+const path = require("path");
+const { promisify } = require("util");
+const WebSocket = require("ws");
+const compileTemplate = require("./utils/compile-template");
+const WebpackFileEntry = require("./utils/webpack-file-entry");
+const manifestUtils = require("./manifest-utils");
+const vendors = require("./vendors.json");
 
 class WebextensionPlugin {
-  constructor ({
+  constructor({
     port = 35729,
-    host = '127.0.0.1',
+    host = "127.0.0.1",
     reconnectTime = 3000,
     autoreload = true,
-    vendor = 'chrome',
+    vendor = "chrome",
     manifestDefaults = {},
-    manifestOverwrites = {}
-    quiet = false,
+    extendPersmissions = [],
+    quiet = false
   } = {}) {
     // Apply Settings
-    this.port = port
-    this.host = host
-    this.autoreload = autoreload
-    this.reconnectTime = reconnectTime
-    this.vendor = vendor
-    this.manifestDefaults = manifestDefaults
-    this.manifestOverwrites = manifestOverwrites
-    this.quiet = quiet
+    this.port = port;
+    this.host = host;
+    this.autoreload = autoreload;
+    this.reconnectTime = reconnectTime;
+    this.vendor = vendor;
+    this.manifestDefaults = manifestDefaults;
+    this.extendPersmissions = extendPersmissions;
+    this.quiet = quiet;
 
     // Set some defaults
-    this.server = null
-    this.isWatching = false
-    this.startTime = Date.now()
-    this.prevFileTimestamps = new Map()
+    this.server = null;
+    this.isWatching = false;
+    this.startTime = Date.now();
+    this.prevFileTimestamps = new Map();
   }
 
   /**
@@ -39,12 +39,12 @@ class WebextensionPlugin {
    *
    * @param {Object} compiler
    */
-  apply (compiler) {
-    const { name } = this.constructor
-    compiler.hooks.watchRun.tapPromise(name, this.watchRun.bind(this))
-    compiler.hooks.emit.tapPromise(name, this.emit.bind(this))
-    compiler.hooks.afterCompile.tap(name, this.afterCompile.bind(this))
-    compiler.hooks.done.tap(name, this.done.bind(this))
+  apply(compiler) {
+    const { name } = this.constructor;
+    compiler.hooks.watchRun.tapPromise(name, this.watchRun.bind(this));
+    compiler.hooks.emit.tapPromise(name, this.emit.bind(this));
+    compiler.hooks.afterCompile.tap(name, this.afterCompile.bind(this));
+    compiler.hooks.done.tap(name, this.done.bind(this));
   }
 
   /**
@@ -52,9 +52,9 @@ class WebextensionPlugin {
    *
    * @param {Boolean} watching
    */
-  watchRun (watching) {
-    this.isWatching = true
-    return this.startServer()
+  watchRun(watching) {
+    this.isWatching = true;
+    return this.startServer();
   }
 
   /**
@@ -62,13 +62,13 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  emit (compilation) {
-    const { inputFileSystem } = compilation
-    this.readFile = promisify(inputFileSystem.readFile.bind(inputFileSystem))
+  emit(compilation) {
+    const { inputFileSystem } = compilation;
+    this.readFile = promisify(inputFileSystem.readFile.bind(inputFileSystem));
     return Promise.all([
       this.addClient(compilation),
       this.addManifest(compilation)
-    ])
+    ]);
   }
 
   /**
@@ -76,8 +76,8 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  afterCompile (compilation) {
-    return this.watchManifest(compilation)
+  afterCompile(compilation) {
+    return this.watchManifest(compilation);
   }
 
   /**
@@ -85,10 +85,10 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  watchManifest (compilation) {
+  watchManifest(compilation) {
     compilation.fileDependencies.add(
-      path.join(compilation.options.context, 'manifest.json')
-    )
+      path.join(compilation.options.context, "manifest.json")
+    );
   }
 
   /**
@@ -96,31 +96,31 @@ class WebextensionPlugin {
    *
    * @param {Object} stats
    */
-  done (stats) {
-    this.reloadExtensions(stats)
+  done(stats) {
+    this.reloadExtensions(stats);
   }
 
   /**
    * Start websocket server
    * on watch mode
    */
-  startServer () {
+  startServer() {
     return new Promise((resolve, reject) => {
-      if (!this.autoreload || !this.isWatching || this.server) return resolve()
-      const { host, port } = this
+      if (!this.autoreload || !this.isWatching || this.server) return resolve();
+      const { host, port } = this;
       this.server = new WebSocket.Server({ port }, () => {
-        this.log(`listens on ws://${host}:${port}`)
-        resolve()
-      })
-      this.server.on('error', reject)
+        this.log(`listens on ws://${host}:${port}`);
+        resolve();
+      });
+      this.server.on("error", reject);
       this.nofiyExtension = data => {
         this.server.clients.forEach(client => {
           if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(data))
+            client.send(JSON.stringify(data));
           }
-        })
-      }
-    })
+        });
+      };
+    });
   }
 
   /**
@@ -128,9 +128,9 @@ class WebextensionPlugin {
    *
    * @param {*} args
    */
-  log (...args) {
+  log(...args) {
     if (!this.quiet) {
-      console.log('webpack-webextension-plugin', ...args)
+      console.log("webpack-webextension-plugin", ...args);
     }
   }
 
@@ -140,12 +140,12 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  async addClient (compilation) {
+  async addClient(compilation) {
     if (this.autoreload && this.isWatching) {
-      await this.compileClient(compilation)
+      await this.compileClient(compilation);
       // Add client to extension. We will includes this
       // as a background script in the manifest.json later.
-      compilation.assets['webextension-toolbox/client.js'] = this.client
+      compilation.assets["webextension-toolbox/client.js"] = this.client;
     }
   }
 
@@ -155,23 +155,23 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  async compileClient ({ inputFileSystem }) {
+  async compileClient({ inputFileSystem }) {
     // Only compile client once
-    if (this.client) return this.client
+    if (this.client) return this.client;
 
     // Get the client as string
-    const clientPath = path.resolve(__dirname, 'client.js')
-    const clientBuffer = await this.readFile(clientPath)
+    const clientPath = path.resolve(__dirname, "client.js");
+    const clientBuffer = await this.readFile(clientPath);
 
     // Inject settings
     const client = compileTemplate(clientBuffer.toString(), {
       port: this.port,
       host: this.host,
       reconnectTime: this.reconnectTime
-    })
+    });
 
     // Create webpack file entry
-    this.client = new WebpackFileEntry(client)
+    this.client = new WebpackFileEntry(client);
   }
 
   /**
@@ -180,38 +180,45 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  async addManifest (compilation) {
+  async addManifest(compilation) {
     // Load manifest
-    const manifestPath = path.join(compilation.options.context, 'manifest.json')
-    const manifestBuffer = await this.readFile(manifestPath)
+    const manifestPath = path.join(
+      compilation.options.context,
+      "manifest.json"
+    );
+    const manifestBuffer = await this.readFile(manifestPath);
 
     // Convert to JSON
     try {
-      var manifest = JSON.parse(manifestBuffer)
+      var manifest = JSON.parse(manifestBuffer);
     } catch (error) {
-      throw new Error('Could not parse manifest.json')
+      throw new Error("Could not parse manifest.json");
     }
 
     manifest = {
       ...this.manifestDefaults,
-      ...manifest,
-      ...this.manifestOverwrites
-    }
+      ...manifest
+    };
+
+    manifest.permissions.concat(this.extendPersmissions);
 
     // Tranform __chrome__key -> key
-    manifest = manifestUtils.transformVendorKeys(manifest, this.vendor)
+    manifest = manifestUtils.transformVendorKeys(manifest, this.vendor);
 
     // Validate
-    await manifestUtils.validate(manifest)
+    await manifestUtils.validate(manifest);
 
     // Add client
     if (this.autoreload && this.isWatching) {
-      manifest = manifestUtils.addBackgroundscript(manifest, 'webextension-toolbox/client.js')
+      manifest = manifestUtils.addBackgroundscript(
+        manifest,
+        "webextension-toolbox/client.js"
+      );
     }
 
     // Create webpack file entry
-    const manifestStr = JSON.stringify(manifest, null, 2)
-    compilation.assets['manifest.json'] = new WebpackFileEntry(manifestStr)
+    const manifestStr = JSON.stringify(manifest, null, 2);
+    compilation.assets["manifest.json"] = new WebpackFileEntry(manifestStr);
   }
 
   /**
@@ -220,18 +227,18 @@ class WebextensionPlugin {
    *
    * @param {Object} stats
    */
-  reloadExtensions (stats) {
+  reloadExtensions(stats) {
     // Skip in normal mode
-    if (!this.server || !this.isWatching) return
+    if (!this.server || !this.isWatching) return;
 
     // Get changed files since last compile
-    const changedFiles = this.extractChangedFiles(stats.compilation)
+    const changedFiles = this.extractChangedFiles(stats.compilation);
     if (changedFiles.length) {
-      this.log('reloading extension...')
+      this.log("reloading extension...");
       this.nofiyExtension({
-        action: 'reload',
+        action: "reload",
         changedFiles
-      })
+      });
     }
   }
 
@@ -241,27 +248,33 @@ class WebextensionPlugin {
    *
    * @param {Object} compilation
    */
-  extractChangedFiles ({ fileTimestamps, options }) {
-    const changedFiles = new Map()
+  extractChangedFiles({ fileTimestamps, options }) {
+    const changedFiles = new Map();
 
     // Compare file timestamps with last compilation
     for (const [watchfile, timestamp] of fileTimestamps.entries()) {
-      const isFile = Boolean(path.extname(watchfile))
-      if (isFile && (this.prevFileTimestamps.get(watchfile) || this.startTime) < (fileTimestamps.get(watchfile) || Infinity)) {
-        changedFiles.set(watchfile, timestamp)
+      const isFile = Boolean(path.extname(watchfile));
+      if (
+        isFile &&
+        (this.prevFileTimestamps.get(watchfile) || this.startTime) <
+          (fileTimestamps.get(watchfile) || Infinity)
+      ) {
+        changedFiles.set(watchfile, timestamp);
       }
     }
-    this.prevFileTimestamps = fileTimestamps
+    this.prevFileTimestamps = fileTimestamps;
 
     // Remove context path
-    const contextRegex = new RegExp('^' + options.context.replace('/', '\\/') + '\\/')
-    return Array
-      .from(changedFiles.keys())
-      .map(filePath => filePath.replace(contextRegex, ''))
+    const contextRegex = new RegExp(
+      "^" + options.context.replace("/", "\\/") + "\\/"
+    );
+    return Array.from(changedFiles.keys()).map(filePath =>
+      filePath.replace(contextRegex, "")
+    );
   }
 }
 
 // Expose the vendors
-WebextensionPlugin.vendors = vendors
+WebextensionPlugin.vendors = vendors;
 
-module.exports = WebextensionPlugin
+module.exports = WebextensionPlugin;
