@@ -219,6 +219,7 @@ class WebextensionPlugin {
 
     // Create webpack file entry
     const manifestStr = JSON.stringify(manifest, null, 2);
+
     compilation.assets["manifest.json"] = new WebpackFileEntry(manifestStr);
   }
 
